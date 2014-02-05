@@ -1,0 +1,35 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require File.expand_path(File.join(File.dirname(__FILE__), '../lib/brainfuck'))
+
+def usage
+  "Usage: #{$0} FILE"
+end
+
+def exit_with_usage(message=nil)
+  puts usage
+  puts "Error: #{message}" if message
+  exit(1)
+end
+
+def main
+  exit_with_usage unless ARGV.length == 1
+  exit_with_usage if ['-h', '--help'].include?(ARGV[0])
+
+  path = File.expand_path(ARGV[0])
+  exit_with_usage("File doesn't exist: #{path}") unless File.exists?(path)
+
+  contents = File.read(path)
+  interpreter = Brainfuck::Interpreter.new
+  interpreter.run(contents)
+end
+
+if $0 == __FILE__
+  rv = main
+  begin
+    exit(rv)
+  rescue TypeError
+    exit(0)
+  end
+end

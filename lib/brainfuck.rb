@@ -1,4 +1,3 @@
-
 module Brainfuck
   class BrainfuckError < StandardError; end
   class InvalidSyntaxError < BrainfuckError; end

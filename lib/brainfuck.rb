@@ -1,103 +1,111 @@
+
 module Brainfuck
-  class Compiler
-    TAPE_SIZE = 1024
+  class BrainfuckError < StandardError; end
+  class InvalidSyntaxError < BrainfuckError; end
+  class EndOfTapeError < BrainfuckError; end
+
+  class Tape
+    LENGTH = 30_000
 
     def initialize
-      @tape = Array.new(TAPE_SIZE, 0)
+      @tape = Array.new(LENGTH, 0)
       @index = 0
-      @loop = false
+    end
+
+    # Brainfuck spec.
+    def current_value; @tape[@index]; end
+    def null?; @tape[@index] == 0; end
+    def >
+      raise EndOfTapeError if @index == (@tape.length - 1)
+      @index += 1
+    end
+    def <; @index -= 1 unless @index == 0; end
+    def +; @tape[@index] += 1; end
+    def -; @tape[@index] -= 1; end
+    def getc; @tape[@index] = STDIN.getc.to_i; end
+    def putc; print @tape[@index].chr; end
+  end
+
+  class Interpreter
+    def initialize
+      @tape = Tape.new
     end
 
     def run(program)
-      program_index = 0
-      while (program_index < program.length) do
-        char = program[program_index].chr
+      index = 0
+      comment = false
+
+      while (index < program.length) do
+        char = program[index].chr
+        index += 1
+
+        if comment
+          comment = false if char == "\n"
+          next
+        end
 
         case char
-        when '>'
-          @index = @index >= (TAPE_SIZE - 1) ? TAPE_SIZE - 1 : @index + 1
-        when '<'
-          @index = @index <= 1 ? 0 : @index - 1
-        when '+'
-          @tape[@index] += 1
-        when '-'
-          @tape[@index] -= 1
-        when ','
-          @tape[@index] = STDIN.getc
-        when '.'
-          print @tape[@index].chr
+        when '#' then comment = true
+        when '>' then @tape.>
+        when '<' then @tape.<
+        when '+' then @tape.+
+        when '-' then @tape.-
+        when ',' then @tape.getc
+        when '.' then @tape.putc
+        when /\s/
         when '['
-          i = program_index
-          if @tape[@index] == 0
-            loop_end = nil
+          i = index
 
-            # Find nearest loop end and skip past it.
-            while i < program.length do
-              if program[i].chr == ']'
-                loop_end = i
+          # Skip the loop conditionally.
+          next unless @tape.null?
+
+          # Find associated loop end end and skip past it.
+          loop_end_index = nil
+          num_loop_starts_seen = 0
+          num_loop_ends_seen = 0
+
+          while i < program.length do
+            if program[i].chr == ']'
+              if num_loop_starts_seen == num_loop_ends_seen
+                loop_end_index = i
                 break
               else
-                i += 1
+                num_loop_ends_seen += 1
               end
+            elsif program[i].chr == '['
+              num_loop_starts_seen += 1
             end
 
-            raise "Nooo" unless loop_end
-            program_index = loop_end + 1
+            i += 1
           end
+          raise InvalidSyntaxError.new("Unmatched [") unless loop_end_index
+
+          index = loop_end_index + 1
         when ']'
-          i = program_index
-          loop_start = nil
+          i = index - 2 # Start from before the ]
+          loop_start_index = nil
+          num_loop_ends_seen = 0
+          num_loop_starts_seen = 0
 
           while i >= 0 do
             if program[i].chr == '['
-              loop_start = i
-              break
-            else
-              i -= 1
+              if num_loop_ends_seen == num_loop_starts_seen
+                loop_start_index = i
+                break
+              else
+                num_loop_starts_seen += 1
+              end
+            elsif program[i].chr == ']'
+              num_loop_ends_seen += 1
             end
+            i -= 1
           end
-          raise "Nuu" unless loop_start
-          program_index = loop_start - 1
-        when ' ', "\n"
+          raise InvalidSyntaxError.new("Unmatched ]") unless loop_start_index
+          index = loop_start_index
         else
-          raise "Invalid character: #{char.inspect}"
+          raise InvalidSyntaxError.new("Unknown character: #{char.inspect}")
         end
-
-        program_index += 1
       end
     end
   end
-end
-
-def main
-  str =<<EOS
-+++++ +++++
-[
-    > +++++ ++
-    > +++++ +++++
-    > +++
-    > +
-    <<<< -
-]
-> ++ .
-> + .
-+++++ ++ .
-.
-+++ .
-> ++ .
-<< +++++ +++++ +++++ .
-> .
-+++ .
------ - .
------ --- .
-> + .
-> .
-EOS
-
-  Brainfuck::Compiler.new.run(str)
-end
-
-
-if $0 == __FILE__
-  main
 end
